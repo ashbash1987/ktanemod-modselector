@@ -338,6 +338,11 @@ public class ModSelectorService : MonoBehaviour
         if (state == KMGameInfo.State.Setup)
         {
             StartCoroutine(InstanceHoldable());
+            StartCoroutine(CheckForFreeplayDevice());
+        }
+        else
+        {
+            _freeplayCommander = null;
         }
     }
     #endregion
@@ -347,6 +352,22 @@ public class ModSelectorService : MonoBehaviour
     {
         yield return new WaitForSeconds(0.1f);
         Instantiate(holdableToInstance, holdableToInstance.spawnPosition, Quaternion.identity);
+    }
+
+    private IEnumerator CheckForFreeplayDevice()
+    {
+        yield return null;
+        while (true)
+        {
+            UnityEngine.Object[] freeplayDevices = FindObjectsOfType(ReflectionHelper.FindType("FreeplayDevice"));
+            if (freeplayDevices != null && freeplayDevices.Length > 0)
+            {
+                _freeplayCommander = new FreeplayCommander((MonoBehaviour)freeplayDevices[0]);
+                break;
+            }
+
+            yield return null;
+        }
     }
 
     private void GetSolvableModules()
@@ -533,11 +554,27 @@ public class ModSelectorService : MonoBehaviour
         }
     }
 
+    public void UpdateMaxBombs()
+    {
+        
+        if (_freeplayCommander != null)
+        {
+            bool multipleBombs = false;
+            if (_allServices.ContainsKey("MultipleBombs(Clone)"))
+            {
+                multipleBombs |= _allServices["MultipleBombs(Clone)"].IsEnabled;
+            }
+
+            _freeplayCommander.SetMaxModules(GetMaximumModules(), multipleBombs);
+        }
+    }
+
     public void EnableAll()
     {
         EnableAllModules();
         EnableAllMods();
         EnableAllServices();
+        UpdateMaxBombs();
     }
 
     public bool Disable(string modObjectName)
@@ -596,7 +633,9 @@ public class ModSelectorService : MonoBehaviour
     {
         if (_allMods.ContainsKey(modName))
         {
-            return _allMods[modName].EnableModObject(modType, modObjectName);
+            bool result = _allMods[modName].EnableModObject(modType, modObjectName);
+            UpdateMaxBombs();
+            return result;
         }
         else
         {
@@ -610,7 +649,9 @@ public class ModSelectorService : MonoBehaviour
     {
         if (_allMods.ContainsKey(modName))
         {
-            return _allMods[modName].DisableModObject(modType, modObjectName);
+            bool result = _allMods[modName].DisableModObject(modType, modObjectName);
+            UpdateMaxBombs();
+            return result;
         }
         else
         {
@@ -635,6 +676,7 @@ public class ModSelectorService : MonoBehaviour
         EnableAllMods(ModWrapper.BombType);
         EnableAllMods(ModWrapper.WidgetType);
         EnableAllMods(ModWrapper.GameplayRoomType);
+        UpdateMaxBombs();
     }
 
     public void EnableAllMods(Type modType)
@@ -643,6 +685,7 @@ public class ModSelectorService : MonoBehaviour
         {
             modWrapper.EnableModObjects(modType);
         }
+        UpdateMaxBombs();
     }
     
     public void DisableAllMods(Type modType)
@@ -651,6 +694,7 @@ public class ModSelectorService : MonoBehaviour
         {
             modWrapper.DisableModObjects(modType);
         }
+        UpdateMaxBombs();
     }
     #endregion
 
@@ -753,6 +797,7 @@ public class ModSelectorService : MonoBehaviour
         }
 
         _allServices[serviceName].IsEnabled = true;
+        UpdateMaxBombs();
         return true;
     }
 
@@ -764,6 +809,7 @@ public class ModSelectorService : MonoBehaviour
         }
 
         _allServices[serviceName].IsEnabled = false;
+        UpdateMaxBombs();
         return true;
     }
 
@@ -773,6 +819,7 @@ public class ModSelectorService : MonoBehaviour
         {
             service.IsEnabled = true;
         }
+        UpdateMaxBombs();
     }
 
     public void DisableAllServices()
@@ -781,6 +828,7 @@ public class ModSelectorService : MonoBehaviour
         {
             service.IsEnabled = false;
         }
+        UpdateMaxBombs();
     }
     #endregion
     #endregion
@@ -803,6 +851,7 @@ public class ModSelectorService : MonoBehaviour
     #region Private Fields & Properties
     #region Mods
     private Dictionary<string, ModWrapper> _allMods = new Dictionary<string, ModWrapper>();
+    private FreeplayCommander _freeplayCommander = null;
     #endregion
 
     #region Modules
@@ -819,6 +868,7 @@ public class ModSelectorService : MonoBehaviour
 
     #region Mod Manager Discovery
     private Type _modManagerType = null;
+    private static MethodInfo _GetMaximumModulesMethod = null;
 
     private UnityEngine.Object _modManager = null;
     private UnityEngine.Object ModManager
@@ -829,10 +879,17 @@ public class ModSelectorService : MonoBehaviour
             {
                 _modManagerType = ReflectionHelper.FindType("ModManager");
                 _modManager = FindObjectOfType(_modManagerType);
+                _GetMaximumModulesMethod = _modManagerType.GetMethod("GetMaximumModules", BindingFlags.Public | BindingFlags.Instance);
             }
 
             return _modManager;
         }
+    }
+
+    private int GetMaximumModules()
+    {
+        if (_GetMaximumModulesMethod == null || _modManager == null) return -1;
+        return (int) _GetMaximumModulesMethod.Invoke(_modManager, null);
     }
     #endregion
     #endregion
