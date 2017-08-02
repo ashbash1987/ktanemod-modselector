@@ -338,6 +338,8 @@ public class ModSelectorService : MonoBehaviour
         if (state == KMGameInfo.State.Setup)
         {
             StartCoroutine(InstanceHoldable());
+        } else if (state == KMGameInfo.State.Gameplay) {
+            Profile.ReloadActiveConfiguration();
         }
     }
     #endregion
